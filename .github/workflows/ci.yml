@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: "uv"
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Lint with ruff
+        run: uv run ruff check .
+
+      -name: Type check with basedpyright
+        run: uv run basedpyright src/
+
+      - name: Test with pytest
+        run: uv run pytest tests/ -v --cov=src --cov-report=xml
+
+      - name: Check coverage (minimum 80%)
+        run: |
+          coverage=$(uv run pytest tests/ --cov=src --cov-report=term-missing --cov-report=json | grep -oP '\d+\.\d+(?=%)' | tail -1)
+          echo "Coverage: $coverage%"
+          if (( $(echo "$coverage < 80" | bc -l) )); then
+            echo "Coverage is below 80%!"
+            exit 1
+          fi
