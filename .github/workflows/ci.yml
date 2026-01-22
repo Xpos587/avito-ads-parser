@@ -34,12 +34,11 @@ jobs:
       - name: Lint with ruff
         run: uv run ruff check .
 
-      -name: Type check with basedpyright
+      - name: Type check with basedpyright
         run: uv run basedpyright src/
 
       - name: Test with pytest
         run: uv run pytest tests/ -v --cov=src --cov-report=xml
 
       - name: Check coverage (minimum 80%)
-        run: |
-          uv run pytest tests/ --cov=src --cov-fail-under=80 --cov-report=term-missing
+        run: uv run pytest tests/ --cov=src --cov-fail-under=80 --cov-report=term-missing
