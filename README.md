@@ -1,104 +1,104 @@
 # Avito Ads Parser
 
-Pipeline for identifying gaps in product catalog coverage by analyzing marketplace advertisements.
+Пайплайн для поиска пробелов в покрытии товарного каталога путём анализа объявлений на маркетплейсе.
 
-## Why This Exists
+## Зачем это нужно
 
-Company sells spare parts for heavy machinery and wants to systematically discover which product combinations are missing from their sales channels. This pipeline takes raw marketplace listings, enriches them with product classification, and compares against the target catalog to reveal coverage gaps.
+Компания продаёт запчасти для тяжёлой техники и хочет системно находить, какие комбинации товаров отсутствуют в каналах продаж. Пайплайн берёт сырые объявления с маркетплейса, обогащает их классификацией товаров и сравнивает с целевым каталогом, чтобы найти пробелы в покрытии.
 
-## Mental Model
+## Как это работает
 
-The data flows through three stages, each with a single responsibility:
+Данные проходят через три этапа, каждый с одной ответственностью:
 
-1. **Extract** (`src/parser.py`) — Pull raw ads from HTML snapshots
-2. **Enrich** (`src/enricher.py`) — Classify ads via external API
-3. **Analyze** (`src/analyzer.py`) — Find gaps between what we have vs. what we need
+1. **Extract** (`src/parser.py`) — Извлекает объявления из HTML-снимков
+2. **Enrich** (`src/enricher.py`) — Классифицирует объявления через внешний API
+3. **Analyze** (`src/analyzer.py`) — Находит разницу между тем, что есть, и тем, что нужно
 
-Each stage is isolated and can be run independently. If you need to add a new data source (e.g., parse a different marketplace), add a parser in `src/` and plug it into the pipeline in `main.py`. If you need a different enrichment API, swap out the enricher. The analyzer only cares about the final enriched format.
+Каждый этап изолирован и может работать независимо. Если нужно добавить новый источник данных (например, парсить другой маркетплейс), добавьте парсер в `src/` и подключите его в `main.py`. Если нужен другой API для обогащения — замените enricher. Analyzor работает только с финальным обогащённым форматом.
 
-## Project Structure
+## Структура проекта
 
 ```
 avito-ads-parser/
-├── src/          # Core pipeline modules (parser → enricher → analyzer)
-├── data/         # Input (HTML, catalog) and output (CSV files)
-├── logs/         # API request logs for debugging
-├── tests/        # 97% test coverage
-└── main.py       # Orchestrates the full pipeline
+├── src/          # Основные модули пайплайна (parser → enricher → analyzer)
+├── data/         # Входные (HTML, каталог) и выходные (CSV) данные
+├── logs/         # Логи API-запросов для отладки
+├── tests/        # 97% покрытие тестами
+└── main.py       # Оркестрация полного пайплайна
 ```
 
-## Data Format
+## Формат данных
 
-All modules work with the same ad structure. The parser extracts `ad_id`, `title`, `url`, `region`, `price`. The enricher adds `group0-5` (product hierarchy), `marka`, `model`. The analyzer compares `group0 + group1 + group2` combinations against the target catalog.
+Все модули работают с одинаковой структурой объявления. Парсер извлекает `ad_id`, `title`, `url`, `region`, `price`. Enricher добавляет `group0-5` (иерархия товаров), `marka`, `model`. Analyzer сравнивает комбинации `group0 + group1 + group2` с целевым каталогом.
 
-If you need to track additional fields, extend the `Ad` dataclass in `src/parser.py` and update the analyzer's group columns.
+Если нужно отслеживать дополнительные поля, расширьте dataclass `Ad` в `src/parser.py` и обновите колонки групп в analyzer.
 
-## Quick Start
+## Быстрый старт
 
 ```bash
-# Install dependencies (Python 3.14+)
+# Установка зависимостей (Python 3.14+)
 uv sync
 
-# Set your API key
+# Настройка API-ключа
 cp .env.example .env
-# Edit .env and add: TOP505_API_KEY=your_key
+# Отредактируйте .env и добавьте: TOP505_API_KEY=ваш_ключ
 
-# Run the full pipeline
+# Запуск полного пайплайна
 uv run python main.py
 ```
 
-## Output
+## Результат работы
 
-Three files are generated in `data/`:
+В `data/` генерируются три файла:
 
-- `ads_raw.csv` — Raw ads extracted from HTML
-- `ads_enriched.csv` — Ads with product classification from API
-- `missing_coverage.csv` — Product combinations missing from our ads, sorted by priority
+- `ads_raw.csv` — Сырые объявления, извлечённые из HTML
+- `ads_enriched.csv` — Объявления с классификацией товаров от API
+- `missing_coverage.csv` — Комбинации товаров, отсутствующие в объявлениях, отсортированные по приоритету
 
-## Development
+## Разработка
 
 ```bash
-# Run linting, type checking, dead code detection
+# Линтинг, типизация, поиск мёртвого кода
 uv run check
 
-# Run tests
+# Запуск тестов
 uv run test
 
-# Run tests with coverage
+# Тесты с покрытием
 uv run test-cov
 ```
 
-### Adding a New Marketplace Parser
+### Добавление парсера нового маркетплейса
 
-Create a new parser module in `src/` that returns the same `Ad` structure, then import it in `main.py` and swap out `parse_html_files()`.
+Создайте новый модуль парсера в `src/`, который возвращает ту же структуру `Ad`, затем импортируйте его в `main.py` и замените `parse_html_files()`.
 
-### Changing the Enrichment API
+### Смена API обогащения
 
-Modify `src/enricher.py` to call your API instead. The rest of the pipeline expects `group0-5`, `marka`, `model` fields in the enriched output.
+Измените `src/enricher.py` для вызова вашего API. Остальная часть пайплайна ожидает поля `group0-5`, `marka`, `model` в обогащённом выводе.
 
-### Adjusting Coverage Analysis
+### Настройка анализа покрытия
 
-Edit the `group_cols` list in `src/analyzer.py` if you want to compare on different fields.
+Отредактируйте список `group_cols` в `src/analyzer.py`, если хотите сравнивать по другим полям.
 
-## Pipeline Results
+## Результаты на реальных данных
 
-On real data (100 ads from Avito):
-- **Extraction:** 100 ads parsed
-- **Enrichment:** 90/100 (90% success rate)
-- **Coverage:** 6/115 combinations (5.22%)
-- **Gaps identified:** 109 missing combinations
+На реальных данных (100 объявлений с Авито):
+- **Извлечение:** 100 объявлений распарсено
+- **Обогащение:** 90/100 (90% успех)
+- **Покрытие:** 6/115 комбинаций (5.22%)
+- **Найдено пробелов:** 109 отсутствующих комбинаций
 
-## Configuration via Environment Variables
+## Конфигурация через переменные окружения
 
-| Variable | Purpose | Required |
-|----------|---------|----------|
-| `TOP505_API_KEY` | API key for top505.ru enrichment service | Yes |
+| Переменная | Назначение | Обязательно |
+|------------|------------|-------------|
+| `TOP505_API_KEY` | API-ключ для сервиса обогащения top505.ru | Да |
 
-Set these in a `.env` file (see `.env.example` for template).
+Установите их в файле `.env` (шаблон в `.env.example`).
 
 ---
 
-# Implementation Details (per ТЗ Requirements)
+# Детали реализации (по требованиям ТЗ)
 
 ## Как парсились HTML-страницы
 
@@ -107,11 +107,11 @@ Set these in a `.env` file (see `.env.example` for template).
 **Извлекаемые поля:**
 | Поле | Источник | Обязательное |
 |------|----------|--------------|
-| `ad_id` | `data-item-id` атрибут | Да |
-| `title` | `data-marker="item-title"` тег | Да |
-| `url` | `href` атрибут ссылки | Нет |
-| `region` | `data-marker="item-location"` тег | Нет |
-| `price` | `data-marker="item-price"` тег | Нет |
+| `ad_id` | атрибут `data-item-id` | Да |
+| `title` | тег `data-marker="item-title"` | Да |
+| `url` | атрибут `href` ссылки | Нет |
+| `region` | тег `data-marker="item-location"` | Нет |
+| `price` | тег `data-marker="item-price"` | Нет |
 
 Ограничения соблюдены: нет обращений к интернету, нет авторизации/прокси, используется только локальный HTML.
 
@@ -176,15 +176,15 @@ X-API-Key: <ваш-API-ключ>
 
 ---
 
-# Что бы сделать дальше (1-2 недели)
+# Что можно сделать дальше (1-2 недели)
 
 1. **CLI интерфейс** — `argparse` для гибкости: выбор входных файлов, настройка batch size, пороговое значение для покрытия
 2. **Конфигурационный файл** — `config.yaml` для настроек API, путей к файлам, параметров логирования
-3. **Кеширование** — SQLite/redis для хранения результатов обогащения и предотвращения повторных API вызов
+3. **Кеширование** — SQLite/redis для хранения результатов обогащения и предотвращения повторных API вызовов
 4. **Дополнительные метрики** — статистика по брендам, категориям, динамика покрытия во времени
 5. **Прогресс-бар** — `tqdm` для визуализации прогресса при обработке больших объёмов
 6. **Параллелизация** — одновременный парсинг множества HTML-файлов с `asyncio.gather`
 7. **Валидация данных** — `pydantic` модели для валидации входных/выходных данных
-8. **Docker-контейнер** - для упрощения деплоя и воспроизводимости окружения
-9. **Airflow/Prefect DAG** - оркестрация пайплайна с периодическим запуском
-10. **Unit-тесты для edge cases** - больше тестов для граничных случаев (пустые файлы, невалидный HTML, ошибки сети)
+8. **Docker-контейнер** — для упрощения деплоя и воспроизводимости окружения
+9. **Airflow/Prefect DAG** — оркестрация пайплайна с периодическим запуском
+10. **Unit-тесты для edge cases** — больше тестов для граничных случаев (пустые файлы, невалидный HTML, ошибки сети)
