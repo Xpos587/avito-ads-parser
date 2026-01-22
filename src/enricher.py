@@ -38,9 +38,9 @@ logger = logging.getLogger(__name__)
 API_URL = "https://top505.ru/api/item_batch"
 API_KEY = os.getenv("TOP505_API_KEY", "")
 if not API_KEY:
-    raise ValueError(
+    logger.warning(
         "TOP505_API_KEY environment variable is not set. "
-        "Please set it in a .env file or your environment."
+        "API calls will fail with 401 Unauthorized."
     )
 
 # HTTP Status Codes
