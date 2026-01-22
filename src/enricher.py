@@ -18,7 +18,10 @@ import httpx
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
-load_dotenv()
+_ = load_dotenv()
+
+# Create logs directory if it doesn't exist
+Path("logs").mkdir(exist_ok=True)
 
 # Configure logging
 logging.basicConfig(
@@ -198,9 +201,6 @@ async def enrich_all_ads(
     Returns:
         Tuple of (enriched ads list, statistics).
     """
-    # Create logs directory if it doesn't exist
-    Path("logs").mkdir(exist_ok=True)
-
     stats = EnrichmentStats()
     results = []
 
