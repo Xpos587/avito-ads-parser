@@ -1,211 +1,97 @@
 # Avito Ads Parser
 
-Pipeline for processing Avito marketplace advertisements: `HTML (Авито) -> парсинг -> API обогащение -> анализ покрытия`
+Pipeline for identifying gaps in product catalog coverage by analyzing marketplace advertisements.
 
-## Обзор проекта
+## Why This Exists
 
-Этот проект реализует пайплайн для:
-1. Парсинга HTML-страниц Авито для извлечения объявлений
-2. Обогащения объявлений через API (классификация по категориям, брендам, моделям)
-3. Анализа покрытия каталога и выявления недостающих комбинаций
+Company sells spare parts for heavy machinery and wants to systematically discover which product combinations are missing from their sales channels. This pipeline takes raw marketplace listings, enriches them with product classification, and compares against the target catalog to reveal coverage gaps.
 
-## Структура проекта
+## Mental Model
+
+The data flows through three stages, each with a single responsibility:
+
+1. **Extract** (`src/parser.py`) — Pull raw ads from HTML snapshots
+2. **Enrich** (`src/enricher.py`) — Classify ads via external API
+3. **Analyze** (`src/analyzer.py`) — Find gaps between what we have vs. what we need
+
+Each stage is isolated and can be run independently. If you need to add a new data source (e.g., parse a different marketplace), add a parser in `src/` and plug it into the pipeline in `main.py`. If you need a different enrichment API, swap out the enricher. The analyzer only cares about the final enriched format.
+
+## Project Structure
 
 ```
 avito-ads-parser/
-+-- data/
-|   +-- site1.html           # Входные HTML-файлы
-|   +-- site2.html           # Входные HTML-файлы
-|   +-- output.csv           # Целевой каталог (3499 строк)
-|   +-- ads_raw.csv          # Спаршенные объявления
-|   +-- ads_enriched.csv     # Обогащённые объявления
-+-- logs/
-|   +-- api_log.txt          # Логи API запросов
-+-- src/
-|   +-- parser.py            # Парсер HTML
-|   +-- enricher.py          # API клиент
-|   +-- analyzer.py          # Анализатор покрытия
-+-- main.py                  # Точка входа
-+-- pyproject.toml           # Зависимости (uv)
-+-- README.md                # Документация
+├── src/          # Core pipeline modules (parser → enricher → analyzer)
+├── data/         # Input (HTML, catalog) and output (CSV files)
+├── logs/         # API request logs for debugging
+├── tests/        # 97% test coverage
+└── main.py       # Orchestrates the full pipeline
 ```
 
-## Установка
+## Data Format
 
-### Требования
-- Python 3.12+
-- [uv](https://github.com/astral-sh/uv) - менеджер пакетов
+All modules work with the same ad structure. The parser extracts `ad_id`, `title`, `url`, `region`, `price`. The enricher adds `group0-5` (product hierarchy), `marka`, `model`. The analyzer compares `group0 + group1 + group2` combinations against the target catalog.
 
-### Установка зависимостей
+If you need to track additional fields, extend the `Ad` dataclass in `src/parser.py` and update the analyzer's group columns.
+
+## Quick Start
+
 ```bash
+# Install dependencies (Python 3.14+)
 uv sync
-```
 
-## Использование
+# Set your API key
+cp .env.example .env
+# Edit .env and add: TOP505_API_KEY=your_key
 
-### Запуск полного пайплайна
-```bash
+# Run the full pipeline
 uv run python main.py
 ```
 
-### Выходные файлы
-- `data/ads_raw.csv` - сырые данные из HTML
-- `data/ads_enriched.csv` - обогащённые через API
-- `data/missing_coverage.csv` - недостающие комбинации
-- `logs/api_log.txt` - логи API запросов
+## Output
 
-## Детали реализации
+Three files are generated in `data/`:
 
-### 1. Парсинг HTML (`src/parser.py`)
+- `ads_raw.csv` — Raw ads extracted from HTML
+- `ads_enriched.csv` — Ads with product classification from API
+- `missing_coverage.csv` — Product combinations missing from our ads, sorted by priority
 
-**Метод:** BeautifulSoup + lxml
+## Development
 
-**Извлекаемые поля:**
-| Поле | Источник | Обязательное |
-|------|----------|--------------|
-| `ad_id` | `data-item-id` | Да |
-| `title` | `data-marker="item-title"` | Да |
-| `url` | `href` в теге с title | Нет |
-| `region` | `data-marker="item-location"` | Нет |
-| `price` | `data-marker="item-price"` | Нет |
+```bash
+# Run linting, type checking, dead code detection
+uv run check
 
-**Пример извлечения:**
-```python
-from src.parser import parse_html_files
+# Run tests
+uv run test
 
-ads = parse_html_files(['data/site1.html', 'data/site2.html'])
-for ad in ads:
-    print(f"{ad.ad_id}: {ad.title}")
+# Run tests with coverage
+uv run test-cov
 ```
 
-### 2. Обогащение через API (`src/enricher.py`)
+### Adding a New Marketplace Parser
 
-**API детали:**
-- **URL:** `https://top505.ru/api/item_batch`
-- **Method:** POST
-- **Headers:** `X-API-Key: "<ваш-API-ключ>"` (задаётся через переменную окружения `TOP505_API_KEY`)
-- **Rate limit:** 2-5 req/s (реализована задержка 0.5s)
+Create a new parser module in `src/` that returns the same `Ad` structure, then import it in `main.py` and swap out `parse_html_files()`.
 
-**Формат запроса:**
-```json
-{
-  "source": "1c",
-  "data": [
-    {
-      "title": "Натяжитель гусеницы CAT 312 / 188-0895",
-      "day": "2026-01-22"
-    }
-  ]
-}
-```
+### Changing the Enrichment API
 
-**Пример ответа:**
-```json
-{
-  "processed_data": [
-    {
-      "title": "Натяжитель гусеницы CAT 312 / 188-0895",
-      "marka": "cat",
-      "model": "312",
-      "catalog_number": "188-0895",
-      "group0": "ходовая часть",
-      "group1": "натяжитель",
-      "group2": "натяжитель в сборе",
-      "group3": null,
-      "group4": null,
-      ...
-    }
-  ]
-}
-```
+Modify `src/enricher.py` to call your API instead. The rest of the pipeline expects `group0-5`, `marka`, `model` fields in the enriched output.
 
-**Обработка ошибок:**
-| Код | Обработка |
-|-----|-----------|
-| 200 | Успех |
-| 401 | Логирование ошибки auth |
-| 429 | Экспоненциальная пауза + retry |
-| 5xx | Retry до 3 раз |
-| Timeout | Retry до 3 раз |
-| Не-JSON | Логирование + пропуск |
+### Adjusting Coverage Analysis
 
-**Логирование:**
-- Количество отправленных запросов
-- Успешные/неуспешные
-- % успеха
-- Типы ошибок
-- Количество retry
+Edit the `group_cols` list in `src/analyzer.py` if you want to compare on different fields.
 
-### 3. Анализ покрытия (`src/analyzer.py`)
+## Pipeline Results
 
-**Логика сравнения:**
-1. Из `ads_enriched.csv` берём уникальные комбинации `group0 + group1 + group2`
-2. Из `output.csv` берём целевые комбинации
-3. Находим разницу (merge + indicator)
-4. Сортируем по частоте в целевом каталоге
+On real data (100 ads from Avito):
+- **Extraction:** 100 ads parsed
+- **Enrichment:** 90/100 (90% success rate)
+- **Coverage:** 6/115 combinations (5.22%)
+- **Gaps identified:** 109 missing combinations
 
-**Выходные колонки:**
-```csv
-group0,group1,group2,marka,model,reason
-ходовая часть,каток опорный,,,отсутствует
-гидравлический компонент,насос,hyundai,отсутствует
-```
+## Configuration via Environment Variables
 
-## Примеры использования
+| Variable | Purpose | Required |
+|----------|---------|----------|
+| `TOP505_API_KEY` | API key for top505.ru enrichment service | Yes |
 
-### Только парсинг HTML
-```python
-from src.parser import parse_html_files
-import pandas as pd
-
-ads = parse_html_files(['data/site1.html'])
-df = pd.DataFrame([ad.to_dict() for ad in ads])
-df.to_csv('my_ads.csv', index=False)
-```
-
-### Только обогащение
-```python
-import asyncio
-from src.enricher import enrich_all_ads
-
-ads_df = pd.read_csv('my_ads.csv')
-enriched, stats = await enrich_all_ads(
-    ads_df.to_dict('records'),
-    batch_size=200,
-    rate_limit_delay=0.5
-)
-```
-
-### Только анализ покрытия
-```python
-from src.analyzer import generate_coverage_report
-
-report = generate_coverage_report(
-    'data/ads_enriched.csv',
-    'data/output.csv'
-)
-print(f"Coverage: {report['coverage_percentage']}%")
-```
-
-## Результаты запуска
-
-```
-=== Pipeline Summary ===
-Found 100 ads across 2 files
-Successfully enriched 90/100 items (90.0%)
-Coverage: 6.96% (8/115 combinations)
-Missing: 107 combinations
-```
-
-## Возможные улучшения (1-2 недели)
-
-1. **CLI интерфейс** - argparse для гибкости запуска
-2. **Конфигурация** - config.yaml для настроек API
-3. **Кеширование** - не дергать API повторно (sqlite/redis)
-4. **Больше метрик** - статистика по брендам, категориям
-5. **Тесты** - pytest для критических функций
-6. **Docker** - контейнеризация для деплоя
-7. **Airflow/Prefect** - оркестрация пайплайна
-8. **Прогресс-бар** - tqdm для визуализации прогресса
-9. **Параллелизация** - asyncio для парсинга множества файлов
-10. **Валидация** - pydantic для валидации данных
+Set these in a `.env` file (see `.env.example` for template).
