@@ -21,7 +21,7 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.14"
-          cache: "uv"
+          cache: "pip"
 
       - name: Install uv
         run: |
@@ -42,9 +42,4 @@ jobs:
 
       - name: Check coverage (minimum 80%)
         run: |
-          coverage=$(uv run pytest tests/ --cov=src --cov-report=term-missing --cov-report=json | grep -oP '\d+\.\d+(?=%)' | tail -1)
-          echo "Coverage: $coverage%"
-          if (( $(echo "$coverage < 80" | bc -l) )); then
-            echo "Coverage is below 80%!"
-            exit 1
-          fi
+          uv run pytest tests/ --cov=src --cov-fail-under=80 --cov-report=term-missing
